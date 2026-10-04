@@ -1,0 +1,36 @@
+$ErrorActionPreference = 'Stop'
+$taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$taskProfile = Join-Path $taskRoot 'work/runtime-profile'
+$taskData = Join-Path $taskRoot 'work/runtime-data'
+$taskExecutable = Join-Path $taskRoot 'pen-build/Zotero_win-x64/zotero.exe'
+if (!(Test-Path -LiteralPath $taskExecutable)) { throw 'Build the portable runtime first.' }
+if (!(Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22 or newer is required.' }
+if (Get-NetTCPConnection -LocalPort 11192 -State Listen -ErrorAction SilentlyContinue) {
+    throw 'Port 11192 is in use. Close the previous runtime test before continuing.'
+}
+New-Item -ItemType Directory -Path $taskProfile,$taskData -Force | Out-Null
+@'
+user_pref("extensions.zotero.firstRun", false);
+user_pref("extensions.zotero.sync.autoSync", false);
+user_pref("app.update.auto", false);
+user_pref("app.update.enabled", false);
+user_pref("devtools.debugger.remote-enabled", true);
+user_pref("devtools.chrome.enabled", true);
+user_pref("devtools.debugger.prompt-connection", false);
+user_pref("devtools.debugger.remote-port", 11192);
+user_pref("devtools.debugger.force-local", true);
+user_pref("intl.locale.requested", "zh-CN");
+'@ | Set-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
+Push-Location $taskRoot
+try {
+    Start-Process -FilePath $taskExecutable -ArgumentList @('-no-remote','-purgecaches','-profile', ('"' + $taskProfile + '"'), '-datadir', ('"' + $taskData + '"'),'-debugger','-ZoteroDebugText','-ZoteroSkipBundledFiles') -WindowStyle Hidden -RedirectStandardOutput work/runtime-stdout.log -RedirectStandardError work/runtime-stderr.log
+    node scripts/pen/rdp.mjs scripts/pen/runtime-test.js
+    if ($LASTEXITCODE -ne 0) { throw 'Runtime integration checks failed. See work/runtime-results.json.' }
+}
+finally {
+    # Close only the copied test runtime using this test's isolated profile.
+    Get-CimInstance Win32_Process -Filter "Name='zotero.exe'" |
+        Where-Object { $_.ExecutablePath -eq $taskExecutable -and $_.CommandLine.Contains($taskProfile) } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Pop-Location
+}
