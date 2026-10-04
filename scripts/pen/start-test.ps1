@@ -1,4 +1,4 @@
-param([switch]$RecordInput)
+param([switch]$RecordInput, [switch]$DirectPenInput)
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $taskProfile = Join-Path $taskRoot 'pen-profile'
@@ -15,6 +15,9 @@ user_pref("app.update.auto", false);
 user_pref("app.update.enabled", false);
 user_pref("intl.locale.requested", "zh-CN");
 '@ | Set-Content -LiteralPath $taskPrefs -Encoding utf8
+# An explicit value also restores the platform default after a comparison run.
+$taskPenScroll = if ($DirectPenInput) { 'false' } else { 'true' }
+('user_pref("dom.w3c_pointer_events.scroll_by_pen.enabled", ' + $taskPenScroll + ');') | Add-Content -LiteralPath $taskPrefs -Encoding utf8
 if ($RecordInput) {
     if (!(Get-Command node -ErrorAction SilentlyContinue)) { throw 'Input recording requires Node.js.' }
     @'
@@ -54,3 +57,4 @@ if ($RecordInput) {
     finally { Pop-Location }
 }
 Write-Output 'Started the pen test build with an independent profile and data directory.'
+if ($DirectPenInput) { Write-Output 'Direct pen input selected: dragging with the pen will not scroll pages.' }

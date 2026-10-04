@@ -1,4 +1,4 @@
-param([switch]$RecordInput)
+param([switch]$RecordInput, [switch]$DirectPenInput)
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $taskProfile = Join-Path $taskRoot 'work/runtime-profile'
@@ -26,11 +26,15 @@ user_pref("devtools.debugger.remote-port", 11192);
 user_pref("devtools.debugger.force-local", true);
 user_pref("intl.locale.requested", "zh-CN");
 '@ | Set-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
+$taskPenScroll = if ($DirectPenInput) { 'false' } else { 'true' }
+('user_pref("dom.w3c_pointer_events.scroll_by_pen.enabled", ' + $taskPenScroll + ');') | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
 Push-Location $taskRoot
 try {
     Start-Process -FilePath $taskExecutable -ArgumentList @('-no-remote','-purgecaches','-profile', ('"' + $taskProfile + '"'), '-datadir', ('"' + $taskData + '"'),'-debugger','-ZoteroDebugText','-ZoteroSkipBundledFiles') -WindowStyle Hidden -RedirectStandardOutput work/runtime-stdout.log -RedirectStandardError work/runtime-stderr.log
-    if ($RecordInput) { node scripts/pen/rdp.mjs scripts/pen/runtime-test.js --record }
-    else { node scripts/pen/rdp.mjs scripts/pen/runtime-test.js }
+    $taskTestArguments = @('scripts/pen/rdp.mjs', 'scripts/pen/runtime-test.js')
+    if ($RecordInput) { $taskTestArguments += '--record' }
+    if ($DirectPenInput) { $taskTestArguments += '--direct-pen' }
+    & node @taskTestArguments
     if ($LASTEXITCODE -ne 0) { throw 'Runtime integration checks failed. See work/runtime-results.json.' }
 }
 finally {

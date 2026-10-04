@@ -9,6 +9,8 @@ Zotero.__penTestResult = { status: 'running' };
 		if (!condition) throw new Error(name + ': ' + JSON.stringify(detail));
 	}
 	check('isolated data directory', Zotero.DataDirectory.dir === config.dataDir, Zotero.DataDirectory.dir);
+	let penScroll = Services.prefs.getBoolPref('dom.w3c_pointer_events.scroll_by_pen.enabled');
+	check('pen input path matches launch configuration', penScroll === config.penScroll, penScroll);
 	let attachment = await Zotero.Attachments.importFromFile({ file: PathUtils.join(config.root, 'test', 'tests', 'data', 'test.pdf') });
 	let reader = await Zotero.Reader.open(attachment.id);
 	await reader._initPromise;
@@ -145,5 +147,8 @@ Zotero.__penTestResult = { status: 'running' };
 	check('exported PDF contains standard Ink objects', exportedInk.length === annotations.length, exportedInk.length);
 	Zotero.__penTestAttachmentID = attachment.id;
 	Zotero.__penTestResult = { status: 'passed', results, attachmentID: attachment.id, annotationCount: annotations.length, exportPath };
-})().catch(error => { Zotero.__penTestResult = { status: 'failed', error: String(error), stack: error.stack }; });
+})().catch((error) => {
+	Zotero.__penTestResult = { status: 'failed', error: String(error), stack: error.stack };
+});
+// eslint-disable-next-line no-unused-expressions -- Return a status message to the debugger evaluation.
 'Runtime ink tests started';

@@ -19,7 +19,7 @@ for (let attempt = 0; attempt < 40; attempt++) {
 let buffer = Buffer.alloc(0);
 let pending = [];
 let packets = [];
-socket.on('data', data => {
+socket.on('data', (data) => {
 	buffer = Buffer.concat([buffer, data]);
 	while (true) {
 		let colon = buffer.indexOf(58);
@@ -66,7 +66,7 @@ if (!consoleActor) throw new Error('No process console actor');
 let args = (await import('node:process')).argv;
 let expression = args[2] ? fs.readFileSync(args[2], 'utf8') : 'JSON.stringify({zotero:typeof Zotero, services:typeof Services})';
 if (args[2]?.endsWith('runtime-test.js')) {
-	let config = { root: fs.realpathSync('.'), dataDir: fs.realpathSync('work/runtime-data') };
+	let config = { root: fs.realpathSync('.'), dataDir: fs.realpathSync('work/runtime-data'), penScroll: !args.includes('--direct-pen') };
 	expression = `Zotero.__penTestConfig = ${JSON.stringify(config)};\n` + expression;
 }
 if (args[2]?.endsWith('record-input.js')) {
@@ -80,9 +80,9 @@ async function evaluate(text) {
 	let immediate = await request(consoleActor, 'evaluateJSAsync', { text });
 	return next(packet => packet.type === 'evaluationResult' && packet.resultID === immediate.resultID);
 }
-if (args[2]?.endsWith('runtime-test.js') && args[3] === '--record') {
+if (args[2]?.endsWith('runtime-test.js') && args.includes('--record')) {
 	let path = (await import('node:path')).default;
-	let config = { dataDir: fs.realpathSync('work/runtime-data'), output: path.resolve('work/pen-input-events.json') };
+	let config = { dataDir: fs.realpathSync('work/runtime-data'), output: path.resolve('work/runtime-input-events.json') };
 	let recording = `Zotero.__penRecordConfig = ${JSON.stringify(config)};\n` + fs.readFileSync('scripts/pen/record-input.js', 'utf8');
 	await evaluate(recording);
 }
@@ -93,7 +93,8 @@ if (args[2]?.endsWith('runtime-test.js') || args[2]?.endsWith('runtime-export.js
 	for (let attempt = 0; attempt < 100; attempt++) {
 		await new Promise(resolve => setTimeout(resolve, 500));
 		let state = await evaluate(args[2].endsWith('record-input.js')
-			? 'JSON.stringify(Zotero.__penRecordState)' : 'JSON.stringify(Zotero.__penTestResult)');
+			? 'JSON.stringify(Zotero.__penRecordState)'
+			: 'JSON.stringify(Zotero.__penTestResult)');
 		if (typeof state.result === 'string') {
 			let result = JSON.parse(state.result);
 			if (result.status !== 'running') {

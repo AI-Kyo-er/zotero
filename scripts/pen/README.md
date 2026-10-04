@@ -29,7 +29,7 @@
 
 输入修复收集浏览器提供的合并采样点，并补收抬笔坐标。绘制按动画帧合并，但不通过节流丢弃采样点；短笔画保留末点，点按也保存为可绘制线段。输入被取消或捕获丢失时保存已收集的坐标。其他指针和排队中的悬停事件不会结束或污染当前笔画。
 
-v2 处理“快速连续两笔起点重复”的边界情况：鼠标模式下的手写也从 PointerEvent 开始，兼容 mousedown 不再创建手写笔画；每一笔记录开始时间，拒收旧接触的迟到事件及合并采样；同一指针的新接触会结束未收到抬笔的上一笔，再使用新坐标开始下一笔。合并到同一个侧栏注释的多个笔画仍保留各自的起点。
+v2 处理旧事件进入下一笔的边界情况：鼠标模式下的手写也从 PointerEvent 开始，兼容 mousedown 不再创建手写笔画；每一笔记录开始时间，拒收旧接触的迟到事件及合并采样；同一指针的新接触会结束未收到抬笔的上一笔，再使用新坐标开始下一笔。合并到同一个侧栏注释的多个笔画仍保留各自的起点。
 
 ### 起点仍重复时的诊断
 
@@ -44,6 +44,30 @@ v2 处理“快速连续两笔起点重复”的边界情况：鼠标模式下�
 如果传入 PointerEvent 的起点已经错误，应用无法可靠推断真实起点，不能通过随意移动第一点来“修复”。Wacom 官方说明双击距离可导致笔画开始处延迟，并建议减小该距离或通过笔按钮双击。可对照测试驱动中的“笔尖双击距离 / Tip Double Click Distance”，如果有该选项，将它暂时设为关闭，比较快速写字时起点是否仍重复。这个因素尚未在此 CTL-472 上确认。
 
 官方依据：https://101.wacom.com/UserHelp/en/AdvancedPenEraser_Con_Full.htm
+
+### 实机日志发现及直接笔输入对照
+
+随后用户确认起点重复也出现在其他软件。只读检查发现 One by Wacom 全局配置的 `DoubleClickOnOff=true`、`DoubleClickTime=500`，双击距离保存值为 `2.000000`（未将驱动内部值解释为屏幕像素）；`WinUseInk=true`。优先对照 Wacom 属性中的“笔尖双击距离”设为“关闭 / Off”，保持 Windows Ink 不变，跨两个软件比较结果。Wacom 与 UGEE 驱动进程同时运行是另一待排除因素，还没有证据确认驱动冲突。没有改写驱动配置或停止驱动进程。
+
+2026-10-04 的 CTL-472 记录包含 1521 个真实事件、52 次手写落笔。其中 10 次符合重复起点特征：上一笔已经抬起，新位置的悬停事件已经到达，但随后的原生 `pointerdown` 又报告上一笔的起点。两笔间隔 108–157 毫秒，悬停事件领先新落笔 0–31 毫秒。应用按收到的坐标创建笔画，因此 v2 的旧事件隔离还不能解决这个原生坐标异常。这些记录不能单独区分 Windows、驱动及 Gecko 的责任。
+
+已加入可撤回的对照选项；关闭独立试写窗口后运行：
+
+```powershell
+& 'D:\Desktop\Working-Doc\Projects\zotero-10-pen\scripts\pen\start-test.ps1' -RecordInput -DirectPenInput
+```
+
+它只在测试配置中设置 `dom.w3c_pointer_events.scroll_by_pen.enabled=false`，让笔走直接事件路径，保留笔压力及倾角信息，并关闭用笔拖动滚动页面。普通启动会将该值恢复为平台默认的 `true`。同一个 v2 程序即可使用此选项，无需重新打包。
+
+Mozilla [缺陷 1716355](https://bugzilla.mozilla.org/show_bug.cgi?id=1716355) 记录了默认触控路径对笔移动应用容差、过滤部分初始移动事件的问题。对应 Gecko 140.15 ESR 的 `nsWindow::OnPenPointerEvents` 也保留这条分支。这个选项是定位及兼容性实验，尚未确认能解决本机重复起点；直接路径还存在 Windows 拖动阈值过滤，不能宣称已消除所有短笔画丢失。
+
+日志现在也记录实际输入偏好、屏幕坐标及 `isPrimary`。实机日志在 `work/pen-input-events.json`，自动验证日志另存 `work/runtime-input-events.json`。用下面的命令提取重复起点特征：
+
+```powershell
+node scripts/pen/analyze-input.mjs work/pen-input-events.json
+```
+
+分析器要求两笔间已有抬笔、新悬停位置与重复起点相距至少 2 CSS 像素，并限制事件时间窗口；它报告疑似异常，不将用户有意重复落笔全部判成错误。原始记录保存在本地 `work/wacom-real-v2-baseline.json`，未提交到 GitHub。
 
 压感实验读取 `PointerEvent.pressure`。为了继续使用 Zotero 10 原有的 `pageIndex/width/paths` 注释格式，笔画按离散粗细分成普通 Ink 注释，当前映射实际产生 7 个粗细等级，细端是工具最大粗细的 1/4。一笔可能对应侧栏中的多个注释，选择、缩放和删除也以这些分组为单位。它不是完整连续压感格式。驱动如果只向应用发送鼠标事件，压感不会启用；尚未在真实 CTL-472 输入上验证，也没有测量端到端延迟或云同步。
 
@@ -60,11 +84,12 @@ npx.cmd webpack --config-name zotero
 Set-Location ..
 & scripts/pen/build-portable.ps1 -InstalledZotero 'D:\Zotero' -BuildName Zotero_win-x64-v2
 & scripts/pen/test-runtime.ps1
+& scripts/pen/test-runtime.ps1 -DirectPenInput -RecordInput
 ```
 
 重建前关闭本项目的试写窗口，等待其子进程退出。自动桌面验证使用另外的 `work/runtime-profile` 和 `work/runtime-data`，开启仅本机端口 11192 的 Firefox 调试协议，发送合成 PointerEvent，完成数据库保存、重新打开、PDF 导出和标准 Ink 对象检查，最后关闭测试进程。结果在 `work/runtime-results.json`。
 
-当前验证：核心分支 25 项、实验分支 31 项单元测试通过，26 项桌面集成检查通过，webpack 构建通过（2 条资源体积警告）；新增模块及测试 lint 无错误或警告，修改行无 lint 发现。被修改的旧文件整文件检查仍存在上游原有的 lint 错误。起点回归测试能在第一版中复现旧事件进入下一笔的错误，v2 中通过。日志记录工具已用合成事件验证。合成事件测试无法覆盖 Wacom 驱动及真实指针捕获行为，实际试写仍是交付前的必要验证。
+当前验证：核心分支 25 项、实验分支 31 项单元测试通过，27 项桌面集成检查在默认和直接笔输入配置下均通过，webpack 构建通过（2 条资源体积警告）；新增模块及测试 lint 无错误或警告，修改行无 lint 发现。被修改的旧文件整文件检查仍存在上游原有的 lint 错误。起点回归测试能在第一版中复现旧事件进入下一笔的错误，v2 中通过。日志记录工具已用合成事件验证。合成事件测试无法覆盖 Wacom 驱动及真实指针捕获行为，实际试写仍是交付前的必要验证。
 
 ## 上游提交准备
 

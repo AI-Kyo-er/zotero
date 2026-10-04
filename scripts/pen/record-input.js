@@ -15,6 +15,7 @@ Zotero.__penRecordState = { status: 'running' };
 		let sample = event => ({
 			type: event.type, time: event.timeStamp, pointerId: event.pointerId,
 			pointerType: event.pointerType, x: event.clientX, y: event.clientY,
+			screenX: event.screenX, screenY: event.screenY, isPrimary: event.isPrimary,
 			pressure: event.pressure, buttons: event.buttons, detail: event.detail,
 			trusted: event.isTrusted
 		});
@@ -56,14 +57,23 @@ Zotero.__penRecordState = { status: 'running' };
 				traces.set(reader, { events });
 				if (traces.size > 16) traces.delete(traces.keys().next().value);
 			}
-			await IOUtils.writeUTF8(config.output, JSON.stringify({ schema: 1, version: Zotero.version, capturedAt: new Date().toISOString(), readers: [...traces.values()] }, null, 2));
+			let inputPreferences = {};
+			for (let name of ['dom.w3c_pointer_events.scroll_by_pen.enabled', 'dom.w3c_pointer_events.dispatch_by_pointer_messages']) {
+				inputPreferences[name] = Services.prefs.getBoolPref(name);
+			}
+			await IOUtils.writeUTF8(config.output, JSON.stringify({ schema: 2, version: Zotero.version, capturedAt: new Date().toISOString(), inputPreferences, readers: [...traces.values()] }, null, 2));
 		}
-		finally { writing = false; }
+		finally {
+			writing = false;
+		}
 	};
 	if (Zotero.__penRecordInterval) clearInterval(Zotero.__penRecordInterval);
 	await writeTrace();
 	Zotero.__penRecordFlush = writeTrace;
 	Zotero.__penRecordInterval = setInterval(() => writeTrace().catch(error => Zotero.logError(error)), 1000);
 	Zotero.__penRecordState = { status: 'passed', output: config.output };
-})().catch(error => { Zotero.__penRecordState = { status: 'failed', error: String(error), stack: error.stack }; });
+})().catch((error) => {
+	Zotero.__penRecordState = { status: 'failed', error: String(error), stack: error.stack };
+});
+// eslint-disable-next-line no-unused-expressions -- Return a status message to the debugger evaluation.
 'Installing isolated pen input recording';
