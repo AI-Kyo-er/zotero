@@ -69,22 +69,36 @@ if (args[2]?.endsWith('runtime-test.js')) {
 	let config = { root: fs.realpathSync('.'), dataDir: fs.realpathSync('work/runtime-data') };
 	expression = `Zotero.__penTestConfig = ${JSON.stringify(config)};\n` + expression;
 }
+if (args[2]?.endsWith('record-input.js')) {
+	let path = (await import('node:path')).default;
+	let root = fs.realpathSync('.');
+	let dataDir = args[3] ? fs.realpathSync(args[3]) : fs.realpathSync('pen-data');
+	let config = { dataDir, output: path.join(root, 'work', 'pen-input-events.json') };
+	expression = `Zotero.__penRecordConfig = ${JSON.stringify(config)};\n` + expression;
+}
 async function evaluate(text) {
 	let immediate = await request(consoleActor, 'evaluateJSAsync', { text });
 	return next(packet => packet.type === 'evaluationResult' && packet.resultID === immediate.resultID);
 }
+if (args[2]?.endsWith('runtime-test.js') && args[3] === '--record') {
+	let path = (await import('node:path')).default;
+	let config = { dataDir: fs.realpathSync('work/runtime-data'), output: path.resolve('work/pen-input-events.json') };
+	let recording = `Zotero.__penRecordConfig = ${JSON.stringify(config)};\n` + fs.readFileSync('scripts/pen/record-input.js', 'utf8');
+	await evaluate(recording);
+}
 let evaluated = await evaluate(expression);
 console.log(JSON.stringify({ result: evaluated.result, exception: evaluated.exceptionMessage }));
-if (args[2]?.endsWith('runtime-test.js') || args[2]?.endsWith('runtime-export.js')) {
+if (args[2]?.endsWith('runtime-test.js') || args[2]?.endsWith('runtime-export.js') || args[2]?.endsWith('record-input.js')) {
 	let finished = false;
 	for (let attempt = 0; attempt < 100; attempt++) {
 		await new Promise(resolve => setTimeout(resolve, 500));
-		let state = await evaluate('JSON.stringify(Zotero.__penTestResult)');
+		let state = await evaluate(args[2].endsWith('record-input.js')
+			? 'JSON.stringify(Zotero.__penRecordState)' : 'JSON.stringify(Zotero.__penTestResult)');
 		if (typeof state.result === 'string') {
 			let result = JSON.parse(state.result);
 			if (result.status !== 'running') {
-				console.log(JSON.stringify({ status: result.status, checks: result.results?.map(item => ({ name: item.name, passed: item.passed })), error: result.error, stack: result.stack }, null, 2));
-				fs.writeFileSync('work/runtime-results.json', JSON.stringify(result, null, 2));
+				console.log(JSON.stringify({ status: result.status, checks: result.results?.map(item => ({ name: item.name, passed: item.passed })), output: result.output, error: result.error, stack: result.stack }, null, 2));
+				if (!args[2].endsWith('record-input.js')) fs.writeFileSync('work/runtime-results.json', JSON.stringify(result, null, 2));
 				finished = true;
 				if (result.status !== 'passed') (await import('node:process')).default.exitCode = 1;
 				break;

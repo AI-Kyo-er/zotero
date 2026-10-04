@@ -1,9 +1,14 @@
 param(
-    [string]$InstalledZotero = 'D:\Zotero'
+    [string]$InstalledZotero = 'D:\Zotero',
+    [ValidatePattern('^Zotero_win-x64(?:-[A-Za-z0-9]+)?$')]
+    [string]$BuildName = 'Zotero_win-x64'
 )
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$taskRuntime = Join-Path $taskRoot 'pen-build/Zotero_win-x64'
+$taskRuntime = Join-Path $taskRoot "pen-build/$BuildName"
+if (Get-CimInstance Win32_Process -Filter "Name='zotero.exe'" | Where-Object { $_.ExecutablePath -eq (Join-Path $taskRuntime 'zotero.exe') }) {
+    throw 'This test build is running. Close it before rebuilding, or choose another -BuildName.'
+}
 $taskApplicationIni = Join-Path $InstalledZotero 'app/application.ini'
 if (!(Test-Path -LiteralPath $taskApplicationIni) -or
     !(Select-String -LiteralPath $taskApplicationIni -Pattern '^Version=10\.0\.5$')) {
@@ -63,4 +68,5 @@ try {
     }
 }
 finally { $taskArchive.Dispose() }
+[System.IO.File]::WriteAllText((Join-Path $taskRoot 'pen-build/current-build.txt'), $BuildName)
 Write-Output "Portable test runtime: $taskRuntime"

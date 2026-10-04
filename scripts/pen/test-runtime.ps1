@@ -1,8 +1,13 @@
+param([switch]$RecordInput)
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $taskProfile = Join-Path $taskRoot 'work/runtime-profile'
 $taskData = Join-Path $taskRoot 'work/runtime-data'
-$taskExecutable = Join-Path $taskRoot 'pen-build/Zotero_win-x64/zotero.exe'
+$taskBuildName = 'Zotero_win-x64'
+$taskBuildSelection = Join-Path $taskRoot 'pen-build/current-build.txt'
+if (Test-Path -LiteralPath $taskBuildSelection) { $taskBuildName = (Get-Content -LiteralPath $taskBuildSelection -Raw).Trim() }
+if ($taskBuildName -notmatch '^Zotero_win-x64(?:-[A-Za-z0-9]+)?$') { throw 'Invalid build selection.' }
+$taskExecutable = Join-Path $taskRoot "pen-build/$taskBuildName/zotero.exe"
 if (!(Test-Path -LiteralPath $taskExecutable)) { throw 'Build the portable runtime first.' }
 if (!(Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22 or newer is required.' }
 if (Get-NetTCPConnection -LocalPort 11192 -State Listen -ErrorAction SilentlyContinue) {
@@ -24,7 +29,8 @@ user_pref("intl.locale.requested", "zh-CN");
 Push-Location $taskRoot
 try {
     Start-Process -FilePath $taskExecutable -ArgumentList @('-no-remote','-purgecaches','-profile', ('"' + $taskProfile + '"'), '-datadir', ('"' + $taskData + '"'),'-debugger','-ZoteroDebugText','-ZoteroSkipBundledFiles') -WindowStyle Hidden -RedirectStandardOutput work/runtime-stdout.log -RedirectStandardError work/runtime-stderr.log
-    node scripts/pen/rdp.mjs scripts/pen/runtime-test.js
+    if ($RecordInput) { node scripts/pen/rdp.mjs scripts/pen/runtime-test.js --record }
+    else { node scripts/pen/rdp.mjs scripts/pen/runtime-test.js }
     if ($LASTEXITCODE -ne 0) { throw 'Runtime integration checks failed. See work/runtime-results.json.' }
 }
 finally {
