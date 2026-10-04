@@ -19,9 +19,32 @@ Zotero.__penRecordState = { status: 'running' };
 			pressure: event.pressure, buttons: event.buttons, detail: event.detail,
 			trusted: event.isTrusted
 		});
-		for (let type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'mousedown', 'mouseup']) {
+		let actionState = () => ({
+			action: view.action?.type || null, pointerId: view.action?.pointerId,
+			start: view.action?.annotation?.position.paths?.[0]?.slice(0, 2),
+			end: view.action?.annotation?.position.paths?.[0]?.slice(-2),
+			lastEventType: view.action?.lastEvent?.type,
+			pointerDownTriggered: view._pointerDownTriggered,
+			tool: view._tool.type, pressureEnabled: view._tool.pressure,
+			currentPathLength: view.action?.annotation?.position.paths?.[0]?.length,
+			savedInkPaths: view._annotations.filter(annotation => annotation.type === 'ink')
+				.reduce((count, annotation) => count + annotation.position.paths.length, 0)
+		});
+		// F8 marks a visibly missed stroke without recording document contents.
+		win.addEventListener('keydown', (event) => {
+			if (event.key !== 'F8' || event.repeat) return;
+			event.preventDefault();
+			win.__penInputTrace.push({
+				type: 'missed-stroke-marker', time: event.timeStamp,
+				captureState: actionState()
+			});
+		}, true);
+		for (let type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture', 'pointerover', 'pointerout', 'pointerenter', 'pointerleave', 'mousedown', 'mouseup']) {
 			win.addEventListener(type, (event) => {
 				let entry = sample(event);
+				// The view's pointerdown capture listener runs before this listener;
+				// this is a capture-phase snapshot, not always a pre-handler state.
+				entry.captureState = actionState();
 				entries.set(event, entry);
 				entry.coalesced = (event.getCoalescedEvents?.() || []).slice(0, 16).map(sample);
 				win.__penInputTrace.push(entry);
@@ -32,16 +55,13 @@ Zotero.__penRecordState = { status: 'running' };
 			win.addEventListener(type, (event) => {
 				let entry = entries.get(event);
 				if (!entry) return;
-				let action = view.action;
-				entry.after = {
-					action: action?.type || null, pointerId: action?.pointerId,
-					startTime: action?.startTime,
-					start: action?.annotation?.position.paths?.[0]?.slice(0, 2),
-					end: action?.annotation?.position.paths?.[0]?.slice(-2),
-					pointerDownTriggered: view._pointerDownTriggered
-				};
+				entry.after = actionState();
 			});
 		}
+		win.addEventListener('error', (event) => {
+			win.__penInputTrace.push({ type: 'input-error', time: event.timeStamp,
+				message: String(event.message), captureState: actionState() });
+		});
 	}
 	let writing = false;
 	let traces = new Map();
