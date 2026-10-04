@@ -12,7 +12,7 @@
 & 'D:\Desktop\Working-Doc\Projects\zotero-10-pen\scripts\pen\start-test.ps1'
 ```
 
-脚本使用 `pen-build/Zotero_win-x64` 中的独立程序，配置保存在 `pen-profile`，文献数据保存在 `pen-data`。第一次运行将关闭手写平滑和压感，之后菜单选择会保留。这个测试库最初是空的，需要导入一个 PDF 再打开。可以用项目自带的 `test/tests/data/test.pdf`，也可以用一份自己的测试文件。导入测试文件不会改写原来的 Zotero 文献库。
+脚本使用 `pen-build` 中所选的独立程序，配置保存在 `pen-profile`，文献数据保存在 `pen-data`。第一次运行将关闭手写平滑和压感，之后菜单选择会保留。这个测试库最初是空的，需要导入一个 PDF 再打开。可以用项目自带的 `test/tests/data/test.pdf`，也可以用一份自己的测试文件。导入测试文件不会改写原来的 Zotero 文献库。
 
 当前启动器会读取 `pen-build/current-build.txt`，选择已构建的 v2 包 `pen-build/Zotero_win-x64-v2`。先关闭上一版的试写窗口，再运行同一个启动脚本。测试文献及配置仍使用原来的 `pen-data` 和 `pen-profile`。原来的第一版程序目录仍保留。
 
