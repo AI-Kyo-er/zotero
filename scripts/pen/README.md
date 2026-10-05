@@ -52,7 +52,11 @@ Set-Location ..
 
 核心分支 23 项单元测试、实验分支 29 项单元测试通过；清理后的独立包和已安装程序各通过 23 项桌面检查，15 个测试 Ink 注释均保存、重新打开并导出为标准 PDF Ink 对象。webpack 构建通过，有 2 条资源体积警告。新增模块、测试及诊断脚本 lint 通过。合成事件检查不能替代真实设备的端到端体验验证。
 
-诊断启动可加 `-RecordInput`，日志在 `work/pen-input-events.json`，自动验证的日志另存 `work/runtime-input-events.json`。记录事件坐标、时间、压力、指针及笔画状态，不记录 PDF 正文或文献标题。普通启动关闭调试监听。记录会增加开销，不能用来测量平常书写延迟。
+诊断启动可加 `-RecordInput`。每次运行的日志在 Windows 临时目录的 `zotero-pen-recordings/<独立会话 ID>/pen-input-events.json`，启动成功时打印完整路径。同目录的 `session.json` 标明测试库和项目。使用独立文件避免覆盖旧记录，也避免项目同步软件占用共用日志；写入采用临时文件替换，并对 `NS_ERROR_FILE_IS_LOCKED` 最多重试五次。旧的 `work/pen-input-events.json` 保留。
+
+记录事件坐标、时间、压力、指针、笔画状态及脚本错误；按 F8 可标记刚看到的漏笔。不记录 PDF 正文或文献标题。普通启动关闭调试监听。记录会增加开销，不能用来测量平常书写延迟。
+
+在项目目录执行 `node scripts/pen/analyze-strokes.mjs` 会分析该项目最新的手动试写日志，自动验证日志不参与这个选择。也可以提供具体日志路径作为第一个参数，第二个参数是分析结果的输出文件。加 `-PenInputPath Direct` 仅在独立测试配置中关闭 Gecko 的笔拖动滚页，用于输入路径对照，未改变原版 Zotero 配置。
 
 ## 上游提交准备
 

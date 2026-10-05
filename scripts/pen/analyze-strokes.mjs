@@ -1,7 +1,29 @@
 import fs from 'node:fs';
 import process from 'node:process';
+import os from 'node:os';
+import path from 'node:path';
 
-let input = process.argv[2] || 'work/pen-input-events.json';
+function latestRecording() {
+	let directory = path.join(os.tmpdir(), 'zotero-pen-recordings');
+	if (!fs.existsSync(directory)) return null;
+	let root = fs.realpathSync('.');
+	let dataDir = fs.realpathSync('pen-data');
+	let sessions = [];
+	for (let name of fs.readdirSync(directory)) {
+		try {
+			let session = JSON.parse(fs.readFileSync(path.join(directory, name, 'session.json'), 'utf8'));
+			if (session.root === root && session.dataDir === dataDir
+					&& fs.existsSync(session.output)) sessions.push(session);
+		}
+		catch {
+			// Ignore incomplete or unrelated sessions.
+		}
+	}
+	sessions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+	return sessions[0]?.output;
+}
+
+let input = process.argv[2] || latestRecording() || 'work/pen-input-events.json';
 let trace = JSON.parse(fs.readFileSync(input, 'utf8'));
 let summaries = trace.readers.map(({ events }) => {
 	let pending = new Map();

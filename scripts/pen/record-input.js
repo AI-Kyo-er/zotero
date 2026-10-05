@@ -81,7 +81,20 @@ Zotero.__penRecordState = { status: 'running' };
 			for (let name of ['dom.w3c_pointer_events.scroll_by_pen.enabled', 'dom.w3c_pointer_events.dispatch_by_pointer_messages']) {
 				inputPreferences[name] = Services.prefs.getBoolPref(name);
 			}
-			await IOUtils.writeUTF8(config.output, JSON.stringify({ schema: 2, version: Zotero.version, capturedAt: new Date().toISOString(), inputPreferences, readers: [...traces.values()] }, null, 2));
+			let snapshot = JSON.stringify({ schema: 2, version: Zotero.version, capturedAt: new Date().toISOString(), inputPreferences, readers: [...traces.values()] }, null, 2);
+			// Antivirus/indexing can briefly hold even a session-specific file.
+			// Awaiting the delay leaves input handling responsive; retries reuse
+			// the same snapshot instead of dropping the current event buffer.
+			for (let attempt = 0; ; attempt++) {
+				try {
+					await IOUtils.writeUTF8(config.output, snapshot, { tmpPath: config.output + '.tmp' });
+					break;
+				}
+				catch (error) {
+					if (attempt >= 5 || !String(error).includes('NS_ERROR_FILE_IS_LOCKED')) throw error;
+					await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+				}
+			}
 		}
 		finally {
 			writing = false;

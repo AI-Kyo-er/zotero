@@ -1,5 +1,22 @@
 import net from 'node:net';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+
+function recordingConfig(dataDir) {
+	let root = fs.realpathSync('.');
+	// Keep each recording outside cloud-watched project directories. Never
+	// truncate an earlier session's evidence when installing the recorder.
+	let sessionDir = path.join(os.tmpdir(), 'zotero-pen-recordings', randomUUID());
+	fs.mkdirSync(sessionDir, { recursive: true });
+	let config = { root, dataDir: fs.realpathSync(dataDir),
+		output: path.join(sessionDir, 'pen-input-events.json') };
+	fs.writeFileSync(path.join(sessionDir, 'session.json'), JSON.stringify({
+		...config, createdAt: new Date().toISOString()
+	}, null, 2));
+	return config;
+}
 
 let socket;
 for (let attempt = 0; attempt < 40; attempt++) {
@@ -70,10 +87,8 @@ if (args[2]?.endsWith('runtime-test.js')) {
 	expression = `Zotero.__penTestConfig = ${JSON.stringify(config)};\n` + expression;
 }
 if (args[2]?.endsWith('record-input.js')) {
-	let path = (await import('node:path')).default;
-	let root = fs.realpathSync('.');
 	let dataDir = args[3] ? fs.realpathSync(args[3]) : fs.realpathSync('pen-data');
-	let config = { dataDir, output: path.join(root, 'work', 'pen-input-events.json') };
+	let config = recordingConfig(dataDir);
 	expression = `Zotero.__penRecordConfig = ${JSON.stringify(config)};\n` + expression;
 }
 async function evaluate(text) {
@@ -81,8 +96,7 @@ async function evaluate(text) {
 	return next(packet => packet.type === 'evaluationResult' && packet.resultID === immediate.resultID);
 }
 if (args[2]?.endsWith('runtime-test.js') && args.includes('--record')) {
-	let path = (await import('node:path')).default;
-	let config = { dataDir: fs.realpathSync('work/runtime-data'), output: path.resolve('work/runtime-input-events.json') };
+	let config = recordingConfig('work/runtime-data');
 	let recording = `Zotero.__penRecordConfig = ${JSON.stringify(config)};\n` + fs.readFileSync('scripts/pen/record-input.js', 'utf8');
 	await evaluate(recording);
 }
