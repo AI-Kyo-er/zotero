@@ -18,7 +18,7 @@ async function install(write, dataDir = 'isolated-test-data') {
 		}
 	};
 	vm.runInNewContext(source, {
-		Zotero, Services: { prefs: { getBoolPref: () => false } },
+		Zotero, Services: { prefs: { getBoolPref: () => false, getStringPref: () => '0.1' } },
 		IOUtils: { writeUTF8: async (...args) => {
 			calls.push(args);
 			await write(...args);

@@ -1,4 +1,4 @@
-param([switch]$RecordInput, [ValidateSet('Platform','Direct')][string]$PenInputPath = 'Platform')
+param([switch]$RecordInput, [ValidateSet('Platform','Direct','NativeFine')][string]$PenInputPath = 'Platform')
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $taskProfile = Join-Path $taskRoot 'pen-profile'
@@ -18,6 +18,11 @@ user_pref("intl.locale.requested", "zh-CN");
 # This diagnostic selection affects only the isolated test profile.
 $taskPenScroll = if ($PenInputPath -eq 'Direct') { 'false' } else { 'true' }
 ('user_pref("dom.w3c_pointer_events.scroll_by_pen.enabled", ' + $taskPenScroll + ');') | Add-Content -LiteralPath $taskPrefs -Encoding utf8
+$taskMoveTolerance = if ($PenInputPath -eq 'NativeFine') { '0.0' } else { '0.1' }
+('user_pref("apz.touch_move_tolerance", "' + $taskMoveTolerance + '");') | Add-Content -LiteralPath $taskPrefs -Encoding utf8
+# Keep the scrolling gesture threshold while testing the content-move filter.
+'user_pref("apz.touch_start_tolerance", "0.1");' | Add-Content -LiteralPath $taskPrefs -Encoding utf8
+'user_pref("extensions.zotero.reader.inkSize", "1.0");' | Add-Content -LiteralPath $taskPrefs -Encoding utf8
 if ($RecordInput) {
     if (!(Get-Command node -ErrorAction SilentlyContinue)) { throw 'Input recording requires Node.js.' }
     @'
@@ -58,3 +63,4 @@ if ($RecordInput) {
 }
 Write-Output 'Started the pen test build with an independent profile and data directory.'
 if ($PenInputPath -eq 'Direct') { Write-Output 'Diagnostic direct pen path selected; dragging with the pen will not scroll pages.' }
+if ($PenInputPath -eq 'NativeFine') { Write-Output 'Native pen scrolling retained; diagnostic content-move tolerance is zero.' }

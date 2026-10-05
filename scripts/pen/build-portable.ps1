@@ -41,7 +41,9 @@ try {
     try { $taskDefaults = $taskDefaultsStream.ReadToEnd() }
     finally { $taskDefaultsStream.Dispose() }
     $taskNewPrefs = Get-Content -LiteralPath (Join-Path $taskRoot 'defaults/preferences/zotero.js') |
-        Where-Object { $_ -match '^pref\("extensions\.zotero\.reader\.ink(Smoothing|Pressure)"' }
+        Where-Object { $_ -match '^pref\("extensions\.zotero\.reader\.ink(Smoothing|Pressure|Size)"' }
+    # A later overlay may start from an already patched installed archive.
+    $taskDefaults = $taskDefaults -replace '(?m)^pref\("extensions\.zotero\.reader\.ink(?:Smoothing|Pressure|Size)"[^\r\n]*\r?\n?', ''
     $taskPrefsFile = Join-Path $taskRoot 'work/pen-preferences.js'
     New-Item -ItemType Directory -Path (Split-Path $taskPrefsFile) -Force | Out-Null
     [System.IO.File]::WriteAllText($taskPrefsFile, $taskDefaults + "`n" + ($taskNewPrefs -join "`n"), [System.Text.UTF8Encoding]::new($false))

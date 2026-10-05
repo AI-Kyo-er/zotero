@@ -42,6 +42,12 @@ Zotero.__penRecordState = { status: 'running' };
 		for (let type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture', 'pointerover', 'pointerout', 'pointerenter', 'pointerleave', 'mousedown', 'mouseup']) {
 			win.addEventListener(type, (event) => {
 				let entry = sample(event);
+				if (type === 'pointerdown') {
+					entry.target = {
+						inViewer: !!event.target.closest?.('#viewerContainer'),
+						inPage: !!event.target.closest?.('.page')
+					};
+				}
 				// The view's pointerdown capture listener runs before this listener;
 				// this is a capture-phase snapshot, not always a pre-handler state.
 				entry.captureState = actionState();
@@ -80,6 +86,9 @@ Zotero.__penRecordState = { status: 'running' };
 			let inputPreferences = {};
 			for (let name of ['dom.w3c_pointer_events.scroll_by_pen.enabled', 'dom.w3c_pointer_events.dispatch_by_pointer_messages']) {
 				inputPreferences[name] = Services.prefs.getBoolPref(name);
+			}
+			for (let name of ['apz.touch_move_tolerance', 'apz.touch_start_tolerance']) {
+				inputPreferences[name] = Services.prefs.getStringPref(name);
 			}
 			let snapshot = JSON.stringify({ schema: 2, version: Zotero.version, capturedAt: new Date().toISOString(), inputPreferences, readers: [...traces.values()] }, null, 2);
 			// Antivirus/indexing can briefly hold even a session-specific file.

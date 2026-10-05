@@ -1,4 +1,4 @@
-param([switch]$RecordInput, [string]$InstalledExecutable)
+param([switch]$RecordInput, [string]$InstalledExecutable, [ValidateSet('Platform','NativeFine')][string]$PenInputPath = 'Platform', [ValidateSet('1.0','2.0')][string]$InkSize = '2.0')
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $taskProfile = Join-Path $taskRoot 'work/runtime-profile'
@@ -28,11 +28,17 @@ user_pref("devtools.debugger.force-local", true);
 user_pref("intl.locale.requested", "zh-CN");
 '@ | Set-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
 'user_pref("dom.w3c_pointer_events.scroll_by_pen.enabled", true);' | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
+$taskMoveTolerance = if ($PenInputPath -eq 'NativeFine') { '0.0' } else { '0.1' }
+('user_pref("apz.touch_move_tolerance", "' + $taskMoveTolerance + '");') | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
+'user_pref("apz.touch_start_tolerance", "0.1");' | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
+('user_pref("extensions.zotero.reader.inkSize", "' + $InkSize + '");') | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
 Push-Location $taskRoot
 try {
     Start-Process -FilePath $taskExecutable -ArgumentList @('-no-remote','-purgecaches','-profile', ('"' + $taskProfile + '"'), '-datadir', ('"' + $taskData + '"'),'-debugger','-ZoteroDebugText','-ZoteroSkipBundledFiles') -WindowStyle Hidden -RedirectStandardOutput work/runtime-stdout.log -RedirectStandardError work/runtime-stderr.log
     $taskTestArguments = @('scripts/pen/rdp.mjs', 'scripts/pen/runtime-test.js')
+    $taskTestArguments += ('--ink-size=' + $InkSize)
     if ($RecordInput) { $taskTestArguments += '--record' }
+    if ($PenInputPath -eq 'NativeFine') { $taskTestArguments += '--native-fine' }
     & node @taskTestArguments
     if ($LASTEXITCODE -ne 0) { throw 'Runtime integration checks failed. See work/runtime-results.json.' }
 }

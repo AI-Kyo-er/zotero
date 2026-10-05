@@ -11,10 +11,17 @@ Zotero.__penTestResult = { status: 'running' };
 	check('isolated data directory', Zotero.DataDirectory.dir === config.dataDir, Zotero.DataDirectory.dir);
 	let penScroll = Services.prefs.getBoolPref('dom.w3c_pointer_events.scroll_by_pen.enabled');
 	check('platform pen input behavior is preserved', penScroll === true, penScroll);
+	if (config.fineInput) {
+		let moveTolerance = Number(Services.prefs.getStringPref('apz.touch_move_tolerance'));
+		let startTolerance = Number(Services.prefs.getStringPref('apz.touch_start_tolerance'));
+		check('native fine input disables the content-move threshold', moveTolerance === 0, moveTolerance);
+		check('native fine input preserves the scrolling gesture threshold', startTolerance === 0.1, startTolerance);
+	}
 	let attachment = await Zotero.Attachments.importFromFile({ file: PathUtils.join(config.root, 'test', 'tests', 'data', 'test.pdf') });
 	let reader = await Zotero.Reader.open(attachment.id);
 	await reader._initPromise;
 	let internal = reader._internalReader;
+	check('configured default ink width is applied to a new reader', internal._tools.ink.size === config.inkSize, internal._tools.ink.size);
 	let view = internal._primaryView;
 	await view.initializedPromise;
 	await Zotero.Promise.delay(1000);

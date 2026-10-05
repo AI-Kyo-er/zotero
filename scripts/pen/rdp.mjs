@@ -83,7 +83,9 @@ if (!consoleActor) throw new Error('No process console actor');
 let args = (await import('node:process')).argv;
 let expression = args[2] ? fs.readFileSync(args[2], 'utf8') : 'JSON.stringify({zotero:typeof Zotero, services:typeof Services})';
 if (args[2]?.endsWith('runtime-test.js')) {
-	let config = { root: fs.realpathSync('.'), dataDir: fs.realpathSync('work/runtime-data') };
+	let config = { root: fs.realpathSync('.'), dataDir: fs.realpathSync('work/runtime-data'),
+		fineInput: args.includes('--native-fine'),
+		inkSize: Number(args.find(arg => arg.startsWith('--ink-size='))?.split('=')[1] || 2) };
 	expression = `Zotero.__penTestConfig = ${JSON.stringify(config)};\n` + expression;
 }
 if (args[2]?.endsWith('record-input.js')) {

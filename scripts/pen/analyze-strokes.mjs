@@ -47,7 +47,8 @@ let summaries = trace.readers.map(({ events }) => {
 				anomalies.push({ type: 'second-down-without-up', time: event.time });
 			}
 			pending.set(event.pointerId, { down: event, moves: [] });
-			if (event.after && event.after.tool === 'ink' && event.after.action !== 'ink') {
+			if (event.after && event.after.tool === 'ink' && event.after.action !== 'ink'
+					&& event.target?.inPage !== false) {
 				anomalies.push({ type: 'down-without-ink-action', time: event.time,
 					state: event.after });
 			}
@@ -66,6 +67,7 @@ let summaries = trace.readers.map(({ events }) => {
 			contacts.push({
 				downTime: down.time, upTime: event.time, pointerId: event.pointerId,
 				pressureEnabled: down.after?.pressureEnabled,
+				startInPage: down.target?.inPage ?? null,
 				durationMs: event.time - down.time, moves: moves.length,
 				endpointDeltaPx: distance(down, event),
 				firstMoveDelayMs: moves.length ? moves[0].time - down.time : null,
@@ -92,7 +94,8 @@ let summaries = trace.readers.map(({ events }) => {
 		medianFirstMoveDeltaPx: median(contacts.map(contact => contact.firstMoveDeltaPx)
 			.filter(value => value !== null)),
 		contactsWithSaveCounts: contacts.filter(contact => contact.savedPathDelta !== null).length,
-		contactsWithoutNewSavedPath: contacts.filter(contact => contact.savedPathDelta === 0),
+		contactsWithoutNewSavedPath: contacts.filter(contact => contact.savedPathDelta === 0
+			&& contact.startInPage !== false),
 		unfinishedContacts: [...pending.values()].map(({ down }) => ({ time: down.time, pointerId: down.pointerId })),
 		markers, anomalies, contacts
 	};

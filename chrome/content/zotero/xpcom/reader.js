@@ -259,6 +259,7 @@ class ReaderInstance {
 			showAnnotations: true,
 			textSelectionAnnotationMode: Zotero.Prefs.get('reader.textSelectionAnnotationMode'),
 			inkSmoothing: Zotero.Prefs.get('reader.inkSmoothing'),
+			inkSize: Number(Zotero.Prefs.get('reader.inkSize')),
 			inkPressure: Zotero.Prefs.get('reader.inkPressure'),
 			customThemes: Zotero.SyncedSettings.get(Zotero.Libraries.userLibraryID, 'readerCustomThemes') ?? [],
 			lightTheme: Zotero.Prefs.get('reader.lightTheme'),

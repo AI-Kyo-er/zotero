@@ -36,7 +36,11 @@ Wacom [高级笔设置说明](https://101.wacom.com/UserHelp/en/AdvancedPenErase
 & 'D:\Desktop\Working-Doc\Projects\zotero-10-pen\scripts\pen\start-test.ps1'
 ```
 
-当前独立包为 `pen-build/Zotero_win-x64-v3`。试写数据在 `pen-data`、配置在 `pen-profile`，不迁入实际文献库。
+当前独立包为 `pen-build/Zotero_win-x64-v4`。试写数据在 `pen-data`、配置在 `pen-profile`，不迁入实际文献库。
+
+2026-10-05 的后续实机对照确认 Direct 可消除漏笔，但关闭了页面外的笔滚动。用户随后确认 NativeFine 对照“不再丢笔，页面外也能滚动”。本机配置改为保留 `dom.w3c_pointer_events.scroll_by_pen.enabled=true`、仅将 `apz.touch_move_tolerance` 设为字符串 `"0.0"`；滚动启动阈值未改动。相关配置单独备份，支持撤销。
+
+v4 为本地个人配置提供可选 `inkSize` 初始粗细，宿主从 `reader.inkSize` 读取。用户默认值为 `"1.0"`，无有效配置时仍使用原有 2.0；已有笔迹宽度不被重写。这项本地宽度支持未加入此前的上游候选分支。
 
 重新构建和验证：
 
@@ -45,12 +49,14 @@ Set-Location 'D:\Desktop\Working-Doc\Projects\zotero-10-pen\reader'
 npm.cmd test
 npx.cmd webpack --config-name zotero
 Set-Location ..
-& scripts/pen/build-portable.ps1 -BuildName Zotero_win-x64-v3
-& scripts/pen/test-runtime.ps1
-& scripts/pen/test-runtime.ps1 -InstalledExecutable 'D:\Zotero\zotero.exe'
+& scripts/pen/build-portable.ps1 -BuildName Zotero_win-x64-v4
+& scripts/pen/test-runtime.ps1 -PenInputPath NativeFine -InkSize 1.0
+& scripts/pen/test-runtime.ps1 -InstalledExecutable 'D:\Zotero\zotero.exe' -PenInputPath NativeFine -InkSize 1.0
 ```
 
 核心分支 23 项单元测试、实验分支 29 项单元测试通过；清理后的独立包和已安装程序各通过 23 项桌面检查，15 个测试 Ink 注释均保存、重新打开并导出为标准 PDF Ink 对象。webpack 构建通过，有 2 条资源体积警告。新增模块、测试及诊断脚本 lint 通过。合成事件检查不能替代真实设备的端到端体验验证。
+
+v4 独立包及实际安装各通过 26 项桌面检查，新增验证原生滚动保持开启、内容移动过滤阈值为零、滚动启动阈值仍为 0.1，以及新阅读器默认粗细 1.0。只替换程序归档，安装前后 1260 个个人文献库／配置文件哈希一致；只读数据库查询刷新了临时 `zotero.sqlite-shm` 索引，实际主库、WAL、附件、插件及其他配置未变化。当前程序归档和配置均另行备份；回退入口及详细安装记录在本次任务的 outputs 中。
 
 诊断启动可加 `-RecordInput`。每次运行的日志在 Windows 临时目录的 `zotero-pen-recordings/<独立会话 ID>/pen-input-events.json`，启动成功时打印完整路径。同目录的 `session.json` 标明测试库和项目。使用独立文件避免覆盖旧记录，也避免项目同步软件占用共用日志；写入采用临时文件替换，并对 `NS_ERROR_FILE_IS_LOCKED` 最多重试五次。旧的 `work/pen-input-events.json` 保留。
 
