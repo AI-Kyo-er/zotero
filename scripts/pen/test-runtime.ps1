@@ -1,8 +1,11 @@
-param([switch]$RecordInput, [string]$InstalledExecutable, [ValidateSet('Platform','NativeFine')][string]$PenInputPath = 'Platform', [ValidateSet('1.0','2.0')][string]$InkSize = '2.0')
+param([switch]$RecordInput, [string]$InstalledExecutable, [ValidateSet('Platform','NativeFine')][string]$PenInputPath = 'Platform', [ValidateSet('1.0','2.0')][string]$InkSize = '2.0', [string]$RuntimeDirectory = (Join-Path ([IO.Path]::GetTempPath()) 'zotero-pen-runtime-zotero-10-pen'))
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$taskProfile = Join-Path $taskRoot 'work/runtime-profile'
-$taskData = Join-Path $taskRoot 'work/runtime-data'
+# Cloud/indexing locks in the project tree can stall shutdown and preference
+# persistence. The source and reports stay in the project; test data is temporary.
+$taskRuntimeDirectory = [IO.Path]::GetFullPath($RuntimeDirectory)
+$taskProfile = Join-Path $taskRuntimeDirectory 'runtime-profile'
+$taskData = Join-Path $taskRuntimeDirectory 'runtime-data'
 $taskBuildName = 'Zotero_win-x64'
 $taskBuildSelection = Join-Path $taskRoot 'pen-build/current-build.txt'
 if (Test-Path -LiteralPath $taskBuildSelection) { $taskBuildName = (Get-Content -LiteralPath $taskBuildSelection -Raw).Trim() }
@@ -38,6 +41,7 @@ try {
     Start-Process -FilePath $taskExecutable -ArgumentList @('-no-remote','-purgecaches','-profile', ('"' + $taskProfile + '"'), '-datadir', ('"' + $taskData + '"'),'-debugger','-ZoteroDebugText','-ZoteroSkipBundledFiles') -WindowStyle Hidden -RedirectStandardOutput work/runtime-stdout.log -RedirectStandardError work/runtime-stderr.log
     $taskTestArguments = @('scripts/pen/rdp.mjs', 'scripts/pen/runtime-test.js')
     $taskTestArguments += ('--ink-size=' + $InkSize)
+    $taskTestArguments += ('--runtime-dir=' + $taskRuntimeDirectory)
     if ($RecordInput) { $taskTestArguments += '--record' }
     if ($PenInputPath -eq 'NativeFine') { $taskTestArguments += '--native-fine' }
     & node @taskTestArguments

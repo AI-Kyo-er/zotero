@@ -1,8 +1,9 @@
-param([string]$InstalledExecutable)
+param([string]$InstalledExecutable, [string]$RuntimeDirectory = (Join-Path ([IO.Path]::GetTempPath()) 'zotero-pen-runtime-zotero-10-pen'))
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$taskProfile = Join-Path $taskRoot 'work/runtime-profile'
-$taskData = Join-Path $taskRoot 'work/runtime-data'
+$taskRuntimeDirectory = [IO.Path]::GetFullPath($RuntimeDirectory)
+$taskProfile = Join-Path $taskRuntimeDirectory 'runtime-profile'
+$taskData = Join-Path $taskRuntimeDirectory 'runtime-data'
 $taskBuildName = (Get-Content -LiteralPath (Join-Path $taskRoot 'pen-build/current-build.txt') -Raw).Trim()
 if ($taskBuildName -notmatch '^Zotero_win-x64(?:-[A-Za-z0-9]+)?$') { throw 'Invalid build selection.' }
 $taskExecutable = Join-Path $taskRoot "pen-build/$taskBuildName/zotero.exe"
@@ -15,7 +16,7 @@ if (Select-String -LiteralPath (Join-Path $taskProfile 'user.js') -Pattern 'read
 Push-Location $taskRoot
 try {
     Start-Process -FilePath $taskExecutable -ArgumentList @('-no-remote','-purgecaches','-profile', ('"' + $taskProfile + '"'), '-datadir', ('"' + $taskData + '"'),'-debugger','-ZoteroDebugText','-ZoteroSkipBundledFiles') -WindowStyle Hidden -RedirectStandardOutput work/runtime-restart-stdout.log -RedirectStandardError work/runtime-restart-stderr.log
-    & node scripts/pen/rdp.mjs scripts/pen/runtime-restart-test.js
+    & node scripts/pen/rdp.mjs scripts/pen/runtime-restart-test.js ('--runtime-dir=' + $taskRuntimeDirectory)
     if ($LASTEXITCODE -ne 0) { throw 'Runtime restart persistence checks failed.' }
 }
 finally {

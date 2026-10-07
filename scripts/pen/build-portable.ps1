@@ -61,6 +61,9 @@ try {
         $taskRelative = [System.IO.Path]::GetRelativePath($taskReaderBuild, $taskFile.FullName).Replace('\','/')
         $taskReplacements["resource/reader/$taskRelative"] = $taskFile.FullName
     }
+    # webpack preserves the PDF.js bundle; its CSS is copied separately by
+    # pdfjs/build. Include the current source when only that CSS changes.
+    $taskReplacements['resource/reader/pdf/web/viewer.css'] = Join-Path $taskRoot 'reader/pdfjs/viewer.css'
     foreach ($taskName in $taskReplacements.Keys) {
         $taskOldEntry = $taskArchive.GetEntry($taskName)
         if ($taskOldEntry) { $taskOldEntry.Delete() }

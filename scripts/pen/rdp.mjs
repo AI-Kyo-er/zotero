@@ -82,9 +82,13 @@ if (!consoleActor) throw new Error('No process console actor');
 // global process above is the RDP packet, so use the CLI argument via import.
 let args = (await import('node:process')).argv;
 let integrationTest = ['runtime-test.js', 'runtime-restart-test.js'].some(name => args[2]?.endsWith(name));
+let runtimeDirectory = args.find(arg => arg.startsWith('--runtime-dir='))?.slice('--runtime-dir='.length);
+let runtimeDataDir = integrationTest
+	? fs.realpathSync(runtimeDirectory ? path.join(runtimeDirectory, 'runtime-data') : 'work/runtime-data')
+	: undefined;
 let expression = args[2] ? fs.readFileSync(args[2], 'utf8') : 'JSON.stringify({zotero:typeof Zotero, services:typeof Services})';
 if (integrationTest) {
-	let config = { root: fs.realpathSync('.'), dataDir: fs.realpathSync('work/runtime-data'),
+	let config = { root: fs.realpathSync('.'), dataDir: runtimeDataDir,
 		fineInput: args.includes('--native-fine'),
 		inkSize: Number(args.find(arg => arg.startsWith('--ink-size='))?.split('=')[1] || 2) };
 	expression = `Zotero.__penTestConfig = ${JSON.stringify(config)};\n` + expression;
@@ -99,7 +103,7 @@ async function evaluate(text) {
 	return next(packet => packet.type === 'evaluationResult' && packet.resultID === immediate.resultID);
 }
 if (args[2]?.endsWith('runtime-test.js') && args.includes('--record')) {
-	let config = recordingConfig('work/runtime-data');
+	let config = recordingConfig(runtimeDataDir);
 	let recording = `Zotero.__penRecordConfig = ${JSON.stringify(config)};\n` + fs.readFileSync('scripts/pen/record-input.js', 'utf8');
 	await evaluate(recording);
 }
@@ -123,7 +127,7 @@ if (integrationTest || args[2]?.endsWith('runtime-export.js') || args[2]?.endsWi
 				finished = true;
 				if (result.status !== 'passed') (await import('node:process')).default.exitCode = 1;
 				if (integrationTest && result.status === 'passed') {
-					let dataDir = fs.realpathSync('work/runtime-data');
+					let dataDir = runtimeDataDir;
 					await evaluate(`if (Zotero.DataDirectory.dir !== ${JSON.stringify(dataDir)}) throw new Error('Refusing to close a personal library'); setTimeout(() => Zotero.Utilities.Internal.quit(), 200); 'Closing isolated test normally'`);
 				}
 				break;

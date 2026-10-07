@@ -5,14 +5,14 @@ import vm from 'node:vm';
 
 let source = fs.readFileSync(new URL('./record-input.js', import.meta.url), 'utf8');
 
-async function install(write, dataDir = 'isolated-test-data') {
+async function install(write, dataDir = 'isolated-test-data', readers = []) {
 	let calls = [];
 	let intervals = [];
 	let delays = [];
 	let Zotero = {
 		initializationPromise: Promise.resolve(), uiReadyPromise: Promise.resolve(),
 		__penRecordConfig: { dataDir, output: 'session/pen-input-events.json' },
-		DataDirectory: { dir: 'isolated-test-data' }, Reader: { _readers: [] },
+		DataDirectory: { dir: 'isolated-test-data' }, Reader: { _readers: readers },
 		version: '10.0.5', logError: (error) => {
 			throw error;
 		}
@@ -54,6 +54,36 @@ test('transient file locks recover without losing the initial snapshot', async (
 	assert.equal(snapshot.version, '10.0.5');
 	assert.equal(result.calls[2][2].tmpPath, 'session/pen-input-events.json.tmp');
 	assert.equal(result.intervals.length, 1);
+});
+
+test('recording keeps listeners installed but defers serialization until ink is idle', async () => {
+	let busy = true;
+	let installed = false;
+	let serialized = false;
+	let reader = {
+		type: 'pdf', _internalReader: { _primaryView: { initializedPromise: Promise.resolve() } },
+		_iframeWindow: { wrappedJSObject: { eval: (expression) => {
+			if (expression.includes('function install')) {
+				installed = true;
+				return null;
+			}
+			if (expression.includes('return view.action')) return busy;
+			serialized = true;
+			if (expression.includes('__penInputTrace')) return '[]';
+			if (expression.includes('__penInputCapabilities')) return '{}';
+			throw new Error('Unexpected reader evaluation');
+		} } }
+	};
+	let result = await install(async () => {}, 'isolated-test-data', [reader]);
+	assert.equal(result.Zotero.__penRecordState.status, 'passed');
+	assert.equal(installed, true);
+	assert.equal(serialized, false);
+	assert.equal(result.calls.length, 0);
+	busy = false;
+	await result.Zotero.__penRecordFlush();
+	assert.equal(serialized, true);
+	assert.equal(result.calls.length, 1);
+	assert.equal(JSON.parse(result.calls[0][1]).readers.length, 1);
 });
 
 test('a permanent lock reports failure after bounded retries', async () => {

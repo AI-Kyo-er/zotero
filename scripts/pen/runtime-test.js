@@ -49,6 +49,64 @@ Zotero.__penTestResult = { status: 'running' };
 			if (!condition) throw new Error(name + ': ' + JSON.stringify(detail));
 		}
 		reader.setTool({ type: 'ink', smoothing: false, pressure: false });
+		let originalOverlayPage = view._pages[0];
+		let benchmarkDiv = win.document.createElement('div');
+		benchmarkDiv.style.cssText = 'position:absolute;left:-100000px;visibility:hidden;pointer-events:none';
+		win.document.body.append(benchmarkDiv);
+		let benchmarkPage = new originalOverlayPage.constructor(view, { id: 1, div: benchmarkDiv, viewport: page.viewport });
+		let overlayTimings = [];
+		let createdVectors = 0;
+		let createVector = benchmarkPage._createVectorElement.bind(benchmarkPage);
+		benchmarkPage._createVectorElement = (...args) => {
+			createdVectors++;
+			return createVector(...args);
+		};
+		try {
+			let saved = Array.from({ length: 3500 }, (_, i) => ({ kind: 'path',
+				d: 'M ' + i % 500 + ' ' + i % 400 + ' l 1 2 l 3 4 l 5 6',
+				stroke: '#000000', strokeWidth: 1, cap: 'round', join: 'round' }));
+			benchmarkPage._applyDisplayList(saved);
+			let firstSavedNode = benchmarkDiv.querySelector('path');
+			for (let frame = 0; frame < 10; frame++) {
+				let start = win.performance.now();
+				benchmarkPage._applyDisplayList([...saved, { kind: 'path', d: 'M 0 0 L ' + frame + ' 20', stroke: '#000000', strokeWidth: 1 }]);
+				overlayTimings.push(win.performance.now() - start);
+			}
+			check('ink updates preserve existing overlay nodes on a heavily annotated page', benchmarkDiv.querySelector('path') === firstSavedNode);
+			check('ten ink frames create only the ten changing vector nodes', createdVectors === 3510, createdVectors);
+			let rectItem = { kind: 'rect', rect: [0, 0, 10, 20], color: '#ffff00', opacity: 0.4, blend: 'multiply' };
+			let pathItem = saved[0];
+			let circleItem = { kind: 'circle', cx: 10, cy: 10, r: 3, fill: '#000000' };
+			benchmarkPage._applyDisplayList([rectItem, pathItem, rectItem, circleItem]);
+			let overlay = benchmarkDiv.querySelector('.annotationOverlay');
+			let oldRect = overlay.firstChild;
+			let oldPath = overlay.querySelector('path');
+			benchmarkPage._applyDisplayList([rectItem, pathItem, circleItem]);
+			check('mixed rect and vector paint order survives removing a middle rect',
+				overlay.children.length === 2 && overlay.lastChild.children.length === 2
+					&& overlay.firstChild === oldRect && overlay.querySelector('path') === oldPath);
+			benchmarkPage._applyDisplayList([{ ...rectItem, blend: undefined, color: '#ff0000' }, pathItem]);
+			check('changed overlay style removes obsolete blending and vector nodes',
+				overlay.firstChild.style.mixBlendMode === '' && !overlay.querySelector('circle')
+					&& overlay.querySelector('path') === oldPath);
+			let oldSVG = overlay.lastChild;
+			let oldViewport = benchmarkPage._originalPage.viewport;
+			benchmarkPage._originalPage.viewport = { ...oldViewport, width: oldViewport.width * 2, height: oldViewport.height * 2 };
+			benchmarkPage._applyDisplayList([{ ...rectItem, blend: undefined, color: '#ff0000' }, pathItem]);
+			check('overlay reuse updates the SVG view box after zoom', oldSVG.getAttribute('viewBox') === '0 0 ' + oldViewport.width * 2 + ' ' + oldViewport.height * 2);
+			benchmarkPage._applyDisplayList([]);
+			check('removing all annotations removes the overlay', !benchmarkDiv.querySelector('.annotationOverlay'));
+			benchmarkPage._applyDisplayList([pathItem]);
+			check('a removed overlay is rebuilt with its vector geometry', benchmarkDiv.querySelector('path').getAttribute('d') === pathItem.d);
+		}
+		finally { benchmarkDiv.remove(); }
+		check('overlay benchmark completed for a page with 3500 saved paths', overlayTimings.length === 10, overlayTimings);
+		let viewerContainer = win.document.getElementById('viewerContainer');
+		check('ink declares the page as a drawing surface before contact', win.getComputedStyle(page.div).touchAction === 'none', win.getComputedStyle(page.div).touchAction);
+		check('ink leaves the surrounding viewer available for native scrolling', win.getComputedStyle(viewerContainer).touchAction === 'auto', win.getComputedStyle(viewerContainer).touchAction);
+		reader.setTool({ type: 'pointer' });
+		check('leaving ink restores the page pan behavior', win.getComputedStyle(page.div).touchAction === 'auto', win.getComputedStyle(page.div).touchAction);
+		reader.setTool({ type: 'ink', smoothing: false, pressure: false });
 		let expectedStart = (dx, dy) => page.viewport.convertToPdfPoint(x + dx + page.div.scrollLeft - rect.left, y + dy + page.div.scrollTop - rect.top);
 		let near = (a, b) => a.every((value, i) => Math.abs(value - b[i]) < 0.001);
 		send('pointerdown', 0, 0);

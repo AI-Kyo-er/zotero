@@ -22,7 +22,6 @@ $taskMoveTolerance = if ($PenInputPath -eq 'NativeFine') { '0.0' } else { '0.1' 
 ('user_pref("apz.touch_move_tolerance", "' + $taskMoveTolerance + '");') | Add-Content -LiteralPath $taskPrefs -Encoding utf8
 # Keep the scrolling gesture threshold while testing the content-move filter.
 'user_pref("apz.touch_start_tolerance", "0.1");' | Add-Content -LiteralPath $taskPrefs -Encoding utf8
-'user_pref("extensions.zotero.reader.inkSize", "1.0");' | Add-Content -LiteralPath $taskPrefs -Encoding utf8
 if ($RecordInput) {
     if (!(Get-Command node -ErrorAction SilentlyContinue)) { throw 'Input recording requires Node.js.' }
     @'
@@ -41,6 +40,7 @@ if (!(Test-Path -LiteralPath $taskSavedPrefs)) {
 @'
 user_pref("extensions.zotero.reader.inkSmoothing", false);
 user_pref("extensions.zotero.reader.inkPressure", false);
+user_pref("extensions.zotero.reader.inkSize", "1.0");
 '@ | Set-Content -LiteralPath $taskSavedPrefs -Encoding utf8
 }
 $taskBuildName = 'Zotero_win-x64'
