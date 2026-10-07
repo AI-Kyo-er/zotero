@@ -241,6 +241,7 @@ pref("extensions.zotero.tabs.title.reader", "titleCreatorYear");
 
 // Reader
 pref("extensions.zotero.reader.inkSmoothing", true);
+pref("extensions.zotero.reader.inkColor", "#2ea8e5");
 pref("extensions.zotero.reader.inkSize", "2.0");
 pref("extensions.zotero.reader.inkPressure", false);
 pref("extensions.zotero.reader.textSelectionAnnotationMode", "highlight");

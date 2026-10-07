@@ -81,8 +81,9 @@ if (!consoleActor && process.processDescriptor?.actor) {
 if (!consoleActor) throw new Error('No process console actor');
 // global process above is the RDP packet, so use the CLI argument via import.
 let args = (await import('node:process')).argv;
+let integrationTest = ['runtime-test.js', 'runtime-restart-test.js'].some(name => args[2]?.endsWith(name));
 let expression = args[2] ? fs.readFileSync(args[2], 'utf8') : 'JSON.stringify({zotero:typeof Zotero, services:typeof Services})';
-if (args[2]?.endsWith('runtime-test.js')) {
+if (integrationTest) {
 	let config = { root: fs.realpathSync('.'), dataDir: fs.realpathSync('work/runtime-data'),
 		fineInput: args.includes('--native-fine'),
 		inkSize: Number(args.find(arg => arg.startsWith('--ink-size='))?.split('=')[1] || 2) };
@@ -104,7 +105,7 @@ if (args[2]?.endsWith('runtime-test.js') && args.includes('--record')) {
 }
 let evaluated = await evaluate(expression);
 console.log(JSON.stringify({ result: evaluated.result, exception: evaluated.exceptionMessage }));
-if (args[2]?.endsWith('runtime-test.js') || args[2]?.endsWith('runtime-export.js') || args[2]?.endsWith('record-input.js')) {
+if (integrationTest || args[2]?.endsWith('runtime-export.js') || args[2]?.endsWith('record-input.js')) {
 	let finished = false;
 	for (let attempt = 0; attempt < 100; attempt++) {
 		await new Promise(resolve => setTimeout(resolve, 500));
@@ -115,9 +116,16 @@ if (args[2]?.endsWith('runtime-test.js') || args[2]?.endsWith('runtime-export.js
 			let result = JSON.parse(state.result);
 			if (result.status !== 'running') {
 				console.log(JSON.stringify({ status: result.status, checks: result.results?.map(item => ({ name: item.name, passed: item.passed })), output: result.output, error: result.error, stack: result.stack }, null, 2));
-				if (!args[2].endsWith('record-input.js')) fs.writeFileSync('work/runtime-results.json', JSON.stringify(result, null, 2));
+				if (!args[2].endsWith('record-input.js')) {
+					let output = args[2].endsWith('runtime-restart-test.js') ? 'work/runtime-restart-results.json' : 'work/runtime-results.json';
+					fs.writeFileSync(output, JSON.stringify(result, null, 2));
+				}
 				finished = true;
 				if (result.status !== 'passed') (await import('node:process')).default.exitCode = 1;
+				if (integrationTest && result.status === 'passed') {
+					let dataDir = fs.realpathSync('work/runtime-data');
+					await evaluate(`if (Zotero.DataDirectory.dir !== ${JSON.stringify(dataDir)}) throw new Error('Refusing to close a personal library'); setTimeout(() => Zotero.Utilities.Internal.quit(), 200); 'Closing isolated test normally'`);
+				}
 				break;
 			}
 		}

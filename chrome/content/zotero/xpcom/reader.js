@@ -259,6 +259,7 @@ class ReaderInstance {
 			showAnnotations: true,
 			textSelectionAnnotationMode: Zotero.Prefs.get('reader.textSelectionAnnotationMode'),
 			inkSmoothing: Zotero.Prefs.get('reader.inkSmoothing'),
+			inkColor: Zotero.Prefs.get('reader.inkColor'),
 			inkSize: Number(Zotero.Prefs.get('reader.inkSize')),
 			inkPressure: Zotero.Prefs.get('reader.inkPressure'),
 			customThemes: Zotero.SyncedSettings.get(Zotero.Libraries.userLibraryID, 'readerCustomThemes') ?? [],
@@ -414,6 +415,16 @@ class ReaderInstance {
 			},
 			onChangeSidebarView: (view) => {
 				Zotero.Prefs.set('reader.lastSidebarTab', view);
+			},
+			onChangeInkColor: (color) => {
+				if (/^#[0-9a-f]{6}$/i.test(color)) {
+					Zotero.Prefs.set('reader.inkColor', color);
+				}
+			},
+			onChangeInkSize: (size) => {
+				if (Number.isFinite(size) && size > 0) {
+					Zotero.Prefs.set('reader.inkSize', String(size));
+				}
 			},
 			onChangeInkSmoothing: (smoothing) => {
 				Zotero.Prefs.set('reader.inkSmoothing', smoothing);
@@ -684,6 +695,8 @@ class ReaderInstance {
 			Zotero.Prefs.registerObserver('reader.autoDisableTool.text', this._handleAutoDisableToolPrefChange),
 			Zotero.Prefs.registerObserver('reader.autoDisableTool.image', this._handleAutoDisableToolPrefChange),
 			Zotero.Prefs.registerObserver('reader.inkSmoothing', this._handleInkSmoothingPrefChange),
+			Zotero.Prefs.registerObserver('reader.inkColor', this._handleInkColorPrefChange),
+			Zotero.Prefs.registerObserver('reader.inkSize', this._handleInkSizePrefChange),
 			Zotero.Prefs.registerObserver('reader.inkPressure', this._handleInkPressurePrefChange),
 			Zotero.Prefs.registerObserver('reader.popupPositions', this._handlePopupPositionsPrefChange),
 			Zotero.Prefs.registerObserver('reader.readAloudVoices', this._handleReadAloudVoicesPrefChange),
@@ -1241,6 +1254,14 @@ class ReaderInstance {
 	_handleEbookPrefChange = () => {
 		this._internalReader.setFontFamily(Zotero.Prefs.get('reader.ebookFontFamily'));
 		this._internalReader.setHyphenate(Zotero.Prefs.get('reader.ebookHyphenate'));
+	};
+
+	_handleInkColorPrefChange = () => {
+		this._internalReader.setInkColor(Zotero.Prefs.get('reader.inkColor'));
+	};
+
+	_handleInkSizePrefChange = () => {
+		this._internalReader.setInkSize(Number(Zotero.Prefs.get('reader.inkSize')));
 	};
 
 	_handleInkSmoothingPrefChange = () => {

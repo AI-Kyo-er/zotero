@@ -9,6 +9,11 @@ Zotero.__penTestResult = { status: 'running' };
 		if (!condition) throw new Error(name + ': ' + JSON.stringify(detail));
 	}
 	check('isolated data directory', Zotero.DataDirectory.dir === config.dataDir, Zotero.DataDirectory.dir);
+	await Zotero.Libraries.get(Zotero.Libraries.userLibraryID).waitForDataLoad('item');
+	Zotero.Prefs.set('reader.inkSize', String(config.inkSize));
+	Zotero.Prefs.set('reader.inkColor', '#2ea8e5');
+	Zotero.Prefs.set('reader.inkSmoothing', true);
+	Zotero.Prefs.set('reader.inkPressure', false);
 	let penScroll = Services.prefs.getBoolPref('dom.w3c_pointer_events.scroll_by_pen.enabled');
 	check('platform pen input behavior is preserved', penScroll === true, penScroll);
 	if (config.fineInput) {
@@ -141,6 +146,39 @@ Zotero.__penTestResult = { status: 'running' };
 	let pdfAnnotations = JSON.parse(await exportReader._iframeWindow.wrappedJSObject.eval(`window._reader._primaryView._iframeWindow.PDFViewerApplication.pdfDocument.getPage(1).then(page => page.getAnnotations()).then(annotations => JSON.stringify(annotations))`));
 	let exportedInk = pdfAnnotations.filter(annotation => annotation.subtype === 'Ink');
 	check('exported PDF contains standard Ink objects', exportedInk.length === annotations.length, exportedInk.length);
+	let priorInk = JSON.stringify(reader._internalReader._state.annotations.filter(annotation => annotation.type === 'ink'));
+	let settings = { color: '#000000', size: 3.5, smoothing: false, pressure: true };
+	function selectInk(target, settings = {}) {
+		target._internalReader.setTool(Cu.cloneInto({ type: 'ink', ...settings }, target._iframeWindow));
+	}
+	selectInk(reader, settings);
+	for (let [key, value] of Object.entries(settings)) {
+		let stored = Zotero.Prefs.get('reader.ink' + key[0].toUpperCase() + key.slice(1));
+		check('toolbar saves the last ink ' + key, String(stored) === String(value), stored);
+		check('an already open PDF receives the last ink ' + key,
+			exportReader._internalReader._tools.ink[key] === value, exportReader._internalReader._tools.ink[key]);
+	}
+	selectInk(exportReader);
+	let newAttachment = await Zotero.Attachments.importFromFile({ file: PathUtils.join(config.root, 'test', 'tests', 'data', 'test.pdf') });
+	let newReader = await Zotero.Reader.open(newAttachment.id);
+	await newReader._initPromise;
+	await newReader._internalReader._primaryView.initializedPromise;
+	for (let [key, value] of Object.entries(settings)) {
+		check('a different PDF opens with the last ink ' + key,
+			newReader._internalReader._tools.ink[key] === value, newReader._internalReader._tools.ink[key]);
+	}
+	selectInk(newReader, { color: '#5fb236', size: 1.5, smoothing: true, pressure: false });
+	for (let [key, value] of Object.entries({ color: '#5fb236', size: 1.5, smoothing: true, pressure: false })) {
+		check('the active ink tool in an older PDF receives ' + key,
+			exportReader._internalReader._state.tool[key] === value, exportReader._internalReader._state.tool[key]);
+	}
+	check('changing brush defaults preserves existing ink annotations',
+		JSON.stringify(reader._internalReader._state.annotations.filter(annotation => annotation.type === 'ink')) === priorInk);
+	check('ink color changes do not change the highlighter color',
+		reader._internalReader._tools.highlight.color === '#ffd400', reader._internalReader._tools.highlight.color);
+	selectInk(newReader, settings);
+	await IOUtils.writeJSON(PathUtils.join(config.root, 'work', 'ink-persistence-fixture.json'),
+		{ dataDir: config.dataDir, attachmentID: newAttachment.id, settings });
 	Zotero.__penTestAttachmentID = attachment.id;
 	Zotero.__penTestResult = { status: 'passed', results, attachmentID: attachment.id, annotationCount: annotations.length, exportPath };
 })().catch((error) => {

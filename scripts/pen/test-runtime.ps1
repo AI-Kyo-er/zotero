@@ -31,7 +31,8 @@ user_pref("intl.locale.requested", "zh-CN");
 $taskMoveTolerance = if ($PenInputPath -eq 'NativeFine') { '0.0' } else { '0.1' }
 ('user_pref("apz.touch_move_tolerance", "' + $taskMoveTolerance + '");') | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
 'user_pref("apz.touch_start_tolerance", "0.1");' | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
-('user_pref("extensions.zotero.reader.inkSize", "' + $InkSize + '");') | Add-Content -LiteralPath (Join-Path $taskProfile 'user.js') -Encoding utf8
+# Ink preferences are seeded by the test, not forced by user.js, so that
+# the same profile can verify persistence across a fresh process start.
 Push-Location $taskRoot
 try {
     Start-Process -FilePath $taskExecutable -ArgumentList @('-no-remote','-purgecaches','-profile', ('"' + $taskProfile + '"'), '-datadir', ('"' + $taskData + '"'),'-debugger','-ZoteroDebugText','-ZoteroSkipBundledFiles') -WindowStyle Hidden -RedirectStandardOutput work/runtime-stdout.log -RedirectStandardError work/runtime-stderr.log
@@ -44,6 +45,12 @@ try {
 }
 finally {
     # Close only the copied test runtime using this test's isolated profile.
+    # Successful tests request a normal shutdown so preferences are flushed.
+    $taskClosingProcesses = Get-CimInstance Win32_Process -Filter "Name='zotero.exe'" |
+        Where-Object { $_.ExecutablePath -eq $taskExecutable -and $_.CommandLine.Contains($taskProfile) }
+    foreach ($taskProcess in $taskClosingProcesses) {
+        Wait-Process -Id $taskProcess.ProcessId -Timeout 15 -ErrorAction SilentlyContinue
+    }
     Get-CimInstance Win32_Process -Filter "Name='zotero.exe'" |
         Where-Object { $_.ExecutablePath -eq $taskExecutable -and $_.CommandLine.Contains($taskProfile) } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
