@@ -11,8 +11,8 @@ if (Get-CimInstance Win32_Process -Filter "Name='zotero.exe'" | Where-Object { $
 }
 $taskApplicationIni = Join-Path $InstalledZotero 'app/application.ini'
 if (!(Test-Path -LiteralPath $taskApplicationIni) -or
-    !(Select-String -LiteralPath $taskApplicationIni -Pattern '^Version=10\.0\.5$')) {
-    throw 'This overlay build requires an installed Zotero 10.0.5 runtime.'
+    !(Select-String -LiteralPath $taskApplicationIni -Pattern '^Version=10\.0\.[56]$')) {
+    throw 'This overlay build requires a verified Zotero 10.0.5 or 10.0.6 runtime.'
 }
 New-Item -ItemType Directory -Path $taskRuntime -Force | Out-Null
 foreach ($taskFile in Get-ChildItem -LiteralPath $InstalledZotero -File) {
@@ -50,8 +50,19 @@ try {
     $taskReplacements['defaults/preferences/zotero.js'] = $taskPrefsFile
     foreach ($taskLocale in @('en-US','zh-CN','zh-TW')) {
         $taskSource = "chrome/locale/$taskLocale/zotero/reader.ftl"
-        $taskReplacements[$taskSource] = $taskSource
-        $taskReplacements["localization/$taskLocale/reader.ftl"] = $taskSource
+        # Preserve updated official translations and append only the two ink labels.
+        $taskInkLabels = Get-Content -LiteralPath (Join-Path $taskRoot $taskSource) |
+            Where-Object { $_ -match '^reader-ink-(smoothing|pressure-experimental)\s*=' }
+        if ($taskInkLabels.Count -ne 2) { throw 'Missing custom ink labels.' }
+        foreach ($taskLocaleEntry in @($taskSource,"localization/$taskLocale/reader.ftl")) {
+            $taskLocaleReader = [System.IO.StreamReader]::new($taskArchive.GetEntry($taskLocaleEntry).Open())
+            try { $taskLocaleText = $taskLocaleReader.ReadToEnd() }
+            finally { $taskLocaleReader.Dispose() }
+            $taskLocaleText = $taskLocaleText -replace '(?m)^reader-ink-(?:smoothing|pressure-experimental)\s*=[^\r\n]*\r?\n?', ''
+            $taskLocaleOutput = Join-Path $taskRoot ("work/ink-labels-" + $taskLocale + '-' + $taskLocaleEntry.StartsWith('localization/') + '.ftl')
+            [IO.File]::WriteAllText($taskLocaleOutput, $taskLocaleText + "`n" + ($taskInkLabels -join "`n"), [Text.UTF8Encoding]::new($false))
+            $taskReplacements[$taskLocaleEntry] = $taskLocaleOutput
+        }
     }
     $taskReaderBuild = Join-Path $taskRoot 'reader/build/zotero'
     if (!(Test-Path -LiteralPath (Join-Path $taskReaderBuild 'reader.js'))) {
@@ -59,6 +70,9 @@ try {
     }
     foreach ($taskFile in Get-ChildItem -LiteralPath $taskReaderBuild -File -Recurse) {
         $taskRelative = [System.IO.Path]::GetRelativePath($taskReaderBuild, $taskFile.FullName).Replace('\','/')
+        # Keep the PDF.js/worker/WASM bundle belonging to the installed release.
+        # The 10.0.6 OpenJPEG fix must not be replaced with the old 10.0.5 bundle.
+        if ($taskRelative.StartsWith('pdf/')) { continue }
         $taskReplacements["resource/reader/$taskRelative"] = $taskFile.FullName
     }
     # webpack preserves the PDF.js bundle; its CSS is copied separately by

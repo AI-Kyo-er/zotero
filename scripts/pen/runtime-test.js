@@ -177,6 +177,34 @@ Zotero.__penTestResult = { status: 'running' };
 		return JSON.stringify(results);
 	})()`);
 	results.push(...JSON.parse(result));
+	await Zotero.Promise.delay(100);
+	let menuResult = reader._iframeWindow.wrappedJSObject.eval(`(() => {
+		let reader = window._reader;
+		let oldOpen = reader._onOpenContextMenu;
+		let oldTool = { smoothing: reader._tools.ink.smoothing, pressure: reader._tools.ink.pressure };
+		let menu;
+		reader._onOpenContextMenu = params => { menu = params; };
+		try {
+			let button = Array.from(document.querySelectorAll('button')).find(node => node.title === reader._getString('reader-pick-color'));
+			if (!button || button.disabled) throw new Error('The ink options button is unavailable');
+			button.click();
+			let items = menu?.itemGroups.flat() || [];
+			let results = [];
+			for (let [key, labelKey] of [['smoothing', 'reader-ink-smoothing'], ['pressure', 'reader-ink-pressure-experimental']]) {
+				let label = reader._getString(labelKey);
+				let item = items.find(candidate => candidate.label === label);
+				results.push({ name: 'ink options expose the localized ' + key + ' checkbox', passed: !!item && label !== labelKey && typeof item.checked === 'boolean', detail: label });
+				item?.onCommand();
+				results.push({ name: 'the ' + key + ' checkbox command changes the active tool', passed: reader._tools.ink[key] === !oldTool[key], detail: reader._tools.ink[key] });
+			}
+			return JSON.stringify(results);
+		}
+		finally {
+			reader._onOpenContextMenu = oldOpen;
+			reader.setTool(oldTool);
+		}
+	})()`);
+	for (let item of JSON.parse(menuResult)) check(item.name, item.passed, item.detail);
 	await Zotero.__penRecordFlush?.();
 	Zotero.Prefs.set('reader.inkSmoothing', true);
 	check('smoothing preference observer updates the active reader', internal._tools.ink.smoothing === true, internal._tools.ink.smoothing);

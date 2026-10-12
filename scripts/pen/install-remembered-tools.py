@@ -83,6 +83,21 @@ def remove_forced_ink_preferences(raw):
     return b''.join(lines), removed
 
 
+def prompt_app_updates(raw):
+    # Only the application auto-install preference changes. Update checks and
+    # extension updates keep their existing settings.
+    lines = []
+    for line in raw.splitlines(keepends=True):
+        match = PREF_RE.fullmatch(line.decode('utf-8-sig').rstrip('\r\n'))
+        if match and json.loads(match.group(1)) == 'app.update.auto':
+            continue
+        lines.append(line)
+    result = b''.join(lines)
+    if result and not result.endswith((b'\n', b'\r')):
+        result += b'\r\n'
+    return result + b'// Prompt before app updates replace the custom pen reader.\r\nuser_pref("app.update.auto", false);\r\n'
+
+
 def atomic_write(path, raw):
     temporary = path.with_name(path.name + '.' + str(uuid.uuid4()) + '.tmp')
     with temporary.open('xb') as stream:
@@ -96,6 +111,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--build-name', default='Zotero_win-x64-v5')
     parser.add_argument('--date-label', required=True)
+    parser.add_argument('--prompt-app-updates', action='store_true')
     args = parser.parse_args()
     if not re.fullmatch(r'Zotero_win-x64(?:-[A-Za-z0-9]+)?', args.build_name):
         raise RuntimeError('Invalid build name')
@@ -113,6 +129,8 @@ def main():
     user_path = PROFILE / 'user.js'
     user_before = user_path.read_bytes() if user_path.exists() else None
     user_after, removed = remove_forced_ink_preferences(user_before or b'')
+    if args.prompt_app_updates:
+        user_after = prompt_app_updates(user_after)
     source = ROOT / 'pen-build' / args.build_name / 'app' / 'omni.ja'
     with zipfile.ZipFile(source) as archive:
         if archive.testzip() is not None:
@@ -134,6 +152,7 @@ def main():
         'originalSHA256': sha(PROGRAM), 'profile': str(PROFILE), 'dataDirectory': str(DATA),
         'status': 'backing-up', 'dataInventory': data_before, 'profileInventory': profile_before,
         'removedUserJsPreferences': removed,
+        'appUpdateMode': 'prompt-before-install' if args.prompt_app_updates else 'unchanged',
     }
     atomic_write(manifest_path, json.dumps(manifest, indent=2).encode('utf-8'))
     report('backing-up', backup=str(backup), libraryFiles=len(data_before['files']))
@@ -151,7 +170,7 @@ def main():
     overlay = ROOT / 'scripts' / 'pen' / 'install-program-overlay.py'
     subprocess.run([sys.executable, str(overlay), '--manifest', str(manifest_path), '--source', str(source)], check=True)
     try:
-        if user_before is not None and user_after != user_before:
+        if user_after != (user_before or b''):
             atomic_write(user_path, user_after)
         after = inventory(PROFILE)
         unchanged_profile = {name: value for name, value in after['files'].items() if name != 'user.js'}
@@ -162,6 +181,8 @@ def main():
         subprocess.run([sys.executable, str(overlay), '--manifest', str(manifest_path), '--restore'], check=True)
         if user_before is not None:
             atomic_write(user_path, user_before)
+        elif user_path.exists():
+            user_path.unlink()
         raise
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     manifest.update({
