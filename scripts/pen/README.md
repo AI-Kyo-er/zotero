@@ -1,4 +1,62 @@
-# Zotero 10.0.5 数位板改进与本地验证
+# Zotero 10 手写改进与跨平台接手说明
+
+## 当前开发分支与 MacBook 拉取（2026-10-29）
+
+完整定制版保存在两个仓库的同名分支 `experimental/pressure-ink-zotero-10`：
+
+| 仓库 | 功能版本提交 | 职责 |
+| --- | --- | --- |
+| `AI-Kyo-er/zotero` | `0a705b1` | Zotero 宿主偏好桥接、跨文件设置同步、10.0.6 适配，以及 Windows 构建、安装与诊断工具 |
+| `AI-Kyo-er/reader` | `bd3f2fe` | 输入采样、短笔画、压感和平滑开关、笔刷状态、注释图形复用，以及 PDF.js 兼容更新 |
+
+主仓库在上述功能提交之后补充了本段交接说明，并将 `pdf-reader` 子模块（磁盘路径 `reader/`）指向个人 fork。主仓库记录的 Reader 提交仍是 `bd3f2fe89c9a045b6aea54b2d7594c3e273dae2a`。递归更新子模块会取得这个固定版本。
+
+在 MacBook 新拉取一份源码：
+
+```bash
+git clone --branch experimental/pressure-ink-zotero-10 --recurse-submodules https://github.com/AI-Kyo-er/zotero.git zotero-10-pen
+cd zotero-10-pen
+git rev-parse --short HEAD
+git -C reader rev-parse HEAD
+```
+
+已有主仓库且工作区干净时，可以更新同名分支，再同步子模块地址：
+
+```bash
+git fetch origin
+git switch experimental/pressure-ink-zotero-10
+git pull --ff-only
+git submodule sync --recursive
+git submodule update --init --recursive
+```
+
+上述已有仓库的命令以 `origin` 指向 `AI-Kyo-er/zotero` 为前提。子模块按固定提交检出时通常处于 detached HEAD；准备修改 Reader 时，在其中创建适配分支：
+
+```bash
+git -C reader switch -c adapt/macos-pen-input
+```
+
+关键改动分布：
+
+- `chrome/content/zotero/xpcom/reader.js`：将颜色、粗细、压感和平滑状态连接到 Zotero 偏好，并通知已打开的阅读器。
+- `defaults/preferences/zotero.js`、`chrome/locale/*/zotero/reader.ftl`：默认偏好与开关文案。粗细在无有效配置时使用上游默认值；个人安装中保存的是 1.0，之后记忆用户最后选择的值。
+- `reader/src/common/reader.js`、`reader/src/common/context-menu.js`：工具状态与压感、平滑菜单。
+- `reader/src/pdf/ink-input.mjs`、`reader/src/pdf/pressure-ink.mjs`、`reader/src/pdf/pdf-view.js`：采样收集、抬笔端点、压感分组与笔画处理。
+- `reader/src/pdf/page.js`：复用未变化的注释图形，减少书写时的整页重建。
+- `reader/pdfjs/viewer.css`：书写区域与外围滚动区域的触摸行为。
+
+最新 Windows 定制版基于 Zotero 10.0.6，曾通过 59 项运行检查、11 项重启检查及 29 项 Reader 单元测试；这些结果来自 Windows，macOS 尚待适配与设备验证。优先验证 macOS 上 `PointerEvent.pressure`、合并采样、指针捕获、快速笔画、页面外滚动，以及跨文件／重启后的四项设置保留。
+
+`scripts/pen/*.ps1` 和个人安装脚本包含 Windows 程序、配置和数据目录；MacBook 上应以源码及对应 macOS 构建流程继续适配。仓库不包含 `pen-build/` 中的 Windows 测试程序、个人 `pen-profile/`／`pen-data/`、本地日志或资料库备份。
+
+功能版本的主要提交：
+
+- Zotero `de1a88c`：四项笔刷设置的全局记忆；`24b11a7`：图形复用与记录器验证；`0a705b1`：恢复到 10.0.6 并增加应用更新提示的安装选项。
+- Reader `bd74b07`：颜色和粗细的宿主同步；`64a38f1`：注释图形复用；`fe98a08`：页面书写区域声明；`bd3f2fe`：官方 PDF.js OpenJPEG 兼容更新。
+
+下面保留的是此前 Windows 调试、安装与上游贡献的历史记录，其中旧目录和旧构建号对应当时的环境。
+
+## Windows 调试历史
 
 适用反馈：Windows、Wacom CTL-472、快速书写时无墨迹、笔迹滞后、无法关闭平滑，以及下一笔起点重复。
 
